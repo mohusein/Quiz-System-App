@@ -1,0 +1,115 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Quiz System</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 20px; }
+        #quiz-container, #login-container, #register-container { display: none; }
+        button { margin-top: 10px; }
+    </style>
+</head>
+<body>
+    <h1>Quiz System</h1>
+    
+    <div id="auth-container">
+        <h2>Register</h2>
+        <input type="text" id="register-username" placeholder="Username">
+        <input type="password" id="register-password" placeholder="Password">
+        <button onclick="register()">Register</button>
+
+        <h2>Login</h2>
+        <input type="text" id="login-username" placeholder="Username">
+        <input type="password" id="login-password" placeholder="Password">
+        <button onclick="login()">Login</button>
+    </div>
+
+    <div id="quiz-container">
+        <h2>Quiz</h2>
+        <div id="questions"></div>
+        <button onclick="submitQuiz()">Submit</button>
+    </div>
+
+    <div id="result-container">
+        <h2>Your Score: <span id="score"></span></h2>
+        <button onclick="logout()">Logout</button>
+    </div>
+
+    <script>
+        async function register() {
+            const username = document.getElementById('register-username').value;
+            const password = document.getElementById('register-password').value;
+            const response = await fetch('http://127.0.0.1:5000/register', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ username, password })
+            });
+            const data = await response.json();
+            alert(data.message);
+        }
+
+        async function login() {
+            const username = document.getElementById('login-username').value;
+            const password = document.getElementById('login-password').value;
+            const response = await fetch('http://127.0.0.1:5000/login', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                credentials: 'include',
+                body: JSON.stringify({ username, password })
+            });
+            const data = await response.json();
+            if (response.ok) {
+                alert(data.message);
+                loadQuiz();
+            } else {
+                alert(data.message);
+            }
+        }
+
+        async function loadQuiz() {
+            document.getElementById('auth-container').style.display = 'none';
+            document.getElementById('quiz-container').style.display = 'block';
+
+            const response = await fetch('http://127.0.0.1:5000/quiz');
+            const questions = await response.json();
+            const questionsDiv = document.getElementById('questions');
+            questionsDiv.innerHTML = '';
+
+            questions.forEach(q => {
+                const div = document.createElement('div');
+                div.innerHTML = `<p>${q.question_text}</p>`;
+                q.options.forEach(option => {
+                    div.innerHTML += `<input type="radio" name="question${q.id}" value="${option}">${option}<br>`;
+                });
+                questionsDiv.appendChild(div);
+            });
+        }
+
+        async function submitQuiz() {
+            const answers = [];
+            document.querySelectorAll('#questions > div').forEach((div, index) => {
+                const selectedOption = div.querySelector('input[type="radio"]:checked');
+                if (selectedOption) {
+                    answers.push({ id: index + 1, selected_option: selectedOption.value });
+                }
+            });
+
+            const response = await fetch('http://127.0.0.1:5000/submit', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                credentials: 'include',
+                body: JSON.stringify({ answers })
+            });
+            const data = await response.json();
+            document.getElementById('quiz-container').style.display = 'none';
+            document.getElementById('result-container').style.display = 'block';
+            document.getElementById('score').textContent = data.score;
+        }
+
+        function logout() {
+            location.reload();
+        }
+    </script>
+</body>
+</html>
