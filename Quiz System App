@@ -1,0 +1,74 @@
+from flask import Flask, request, jsonify, session
+from flask_sqlalchemy import SQLAlchemy
+from flask_cors import CORS
+from werkzeug.security import generate_password_hash, check_password_hash
+
+app = Flask(__name__)
+app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///quiz.db'
+app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
+app.config['SECRET_KEY'] = 'secret-key'
+db = SQLAlchemy(app)
+CORS(app, supports_credentials=True)
+
+# Models
+class User(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    username = db.Column(db.String(150), unique=True, nullable=False)
+    password = db.Column(db.String(150), nullable=False)
+    score = db.Column(db.Integer, default=0)
+
+class Question(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    question_text = db.Column(db.String(500), nullable=False)
+    options = db.Column(db.PickleType, nullable=False)
+    answer = db.Column(db.String(150), nullable=False)
+
+# Routes
+@app.route('/register', methods=['POST'])
+def register():
+    data = request.get_json()
+    hashed_password = generate_password_hash(data['password'], method='sha256')
+    new_user = User(username=data['username'], password=hashed_password)
+    db.session.add(new_user)
+    db.session.commit()
+    return jsonify({'message': 'User registered successfully'})
+
+@app.route('/login', methods=['POST'])
+def login():
+    data = request.get_json()
+    user = User.query.filter_by(username=data['username']).first()
+    if user and check_password_hash(user.password, data['password']):
+        session['user_id'] = user.id
+        return jsonify({'message': 'Login successful'})
+    return jsonify({'message': 'Invalid credentials'}), 401
+
+@app.route('/quiz', methods=['GET'])
+def get_quiz():
+    questions = Question.query.all()
+    output = []
+    for q in questions:
+        output.append({
+            'id': q.id,
+            'question_text': q.question_text,
+            'options': q.options
+        })
+    return jsonify(output)
+
+@app.route('/submit', methods=['POST'])
+def submit_quiz():
+    if 'user_id' not in session:
+        return jsonify({'message': 'Unauthorized'}), 401
+    data = request.get_json()
+    score = 0
+    for answer in data['answers']:
+        question = Question.query.get(answer['id'])
+        if question and question.answer == answer['selected_option']:
+            score += 1
+    user = User.query.get(session['user_id'])
+    user.score = score
+    db.session.commit()
+    return jsonify({'score': score})
+
+if __name__ == '__main__':
+    db.create_all()
+    app.run(debug=True)
